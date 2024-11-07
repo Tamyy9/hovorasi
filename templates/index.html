@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Konferencia</title>
+</head>
+<body>
+    <h1>Videokonferencia medzi dvoma užívateľmi</h1>
+    <video id="localVideo" autoplay playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+    <button onclick="startCall()">Začať hovor</button>
+
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let localStream;
+        let peerConnection;
+
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        // Prístup ku kamere a mikrofónu
+        async function startCall() {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+
+            // Nastavenie peer-to-peer spojenia
+            peerConnection = new RTCPeerConnection(configuration);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    socket.emit('signal', { 'candidate': event.candidate });
+                }
+            };
+
+            peerConnection.ontrack = event => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (!remoteVideo.srcObject) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+
+            // Vytvorenie ponuky pre peer-to-peer spojenie
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('signal', { 'sdp': peerConnection.localDescription });
+        }
+
+        // Prijímanie signalizačných správ od druhého klienta
+        socket.on('signal', async (data) => {
+            if (data.sdp) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                if (data.sdp.type === 'offer') {
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                }
+            } else if (data.candidate) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        });
+    </script>
+</body>
+</html>
+
+<!--//Tento HTML kód zobrazí videokonferenčnú stránku, získa prístup k webkamere používateľa, a pomocou WebRTC vytvorí spojenie s druhým klientom. 
+//Socket.IO sa používa na výmenu signálov potrebných na inicializáciu spojenia (ponuky, odpovede, a ICE kandidáty)-->
