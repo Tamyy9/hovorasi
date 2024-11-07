@@ -1,4 +1,5 @@
 Flask==2.0.1
 Flask-SocketIO==5.1.1
 eventlet==0.31.0
-gunicorn -k eventlet -w 1 app:app
+gunicorn==20.0.4
+
